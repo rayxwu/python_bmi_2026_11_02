@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="輸入身高與體重，計算 BMI 並查看成人健康體位建議。">
+    <meta name="description" content="輸入身高與體重，計算 BMI，以儀表板圖呈現體位區間，並查看成人健康建議與風險提醒。">
     <title>BMI 計算器 · 好好生活</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
@@ -22,7 +22,7 @@
           <div class="hero-copy">
             <span class="eyebrow"><span class="eyebrow-dot"></span> YOUR HEALTH, YOUR PACE</span>
             <h1 id="page-title">了解自己的<br><em>健康狀況。GOGOGO!!</em></h1>
-            <p class="intro">輸入身高與體重，快速算出 BMI，找到適合自己的健康生活方向。</p>
+            <p class="intro">輸入身高與體重，快速算出 BMI，透過儀表板一眼看懂體位區間、健康建議與風險提醒。</p>
 
             <div class="calculator">
               <div class="card-heading">
@@ -61,14 +61,20 @@
             {% if result %}
               <section class="result-panel {{ result.tone }}" aria-labelledby="result-title" aria-live="polite">
                 <span class="panel-kicker">YOUR RESULT / 計算結果</span>
-                <div class="result-main">
-                  <span class="result-number">{{ result.bmi }}</span>
-                  <span class="result-unit">BMI</span>
+                {% include "_bmi_gauge.html" %}
+                <div class="result-status">
+                  <span class="result-label">你的體位屬於 <strong>{{ result.label }}</strong></span>
+                  <span class="risk-badge risk-{{ result.risk_level_key }}">健康風險 {{ result.risk_level }}</span>
                 </div>
                 <div class="result-divider"></div>
-                <span class="result-label">你的體位屬於 <strong>{{ result.label }}</strong></span>
                 <h2 id="result-title">給你的健康建議</h2>
                 <p>{{ result.advice }}</p>
+                <h3 class="risk-title"><span aria-hidden="true">!</span> 風險提醒</h3>
+                <ul class="risk-list">
+                  {% for risk in result.risks %}
+                  <li>{{ risk }}</li>
+                  {% endfor %}
+                </ul>
                 <span class="result-decoration" aria-hidden="true">✳</span>
               </section>
             {% else %}

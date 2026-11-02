@@ -1,0 +1,22 @@
+{% set gauge = result.gauge %}
+<div class="gauge-wrap">
+  <svg class="gauge" viewBox="{{ gauge.view_box }}" role="img" aria-labelledby="gauge-title gauge-desc">
+    <title id="gauge-title">BMI 儀表板</title>
+    <desc id="gauge-desc">刻度由 {{ gauge.min }} 至 {{ gauge.max }}，區分過輕、正常、過重與肥胖四個區間；指針指向 BMI {{ result.bmi }}，位於{{ result.label }}區間。</desc>
+    {% for segment in gauge.segments %}
+    <path class="gauge-segment tone-{{ segment.tone }}{% if segment.key == gauge.active_key %} is-active{% endif %}" d="{{ segment.path }}" data-segment="{{ segment.key }}"></path>
+    {% endfor %}
+    {% for tick in gauge.ticks %}
+    <line class="gauge-tick{% if tick.major %} is-major{% endif %}" x1="{{ tick.x1 }}" y1="{{ tick.y1 }}" x2="{{ tick.x2 }}" y2="{{ tick.y2 }}"></line>
+    {% endfor %}
+    {% for label in gauge.labels %}
+    <text class="gauge-label is-{{ label.kind }}{% if label.key and label.key == gauge.active_key %} is-active{% endif %}" x="{{ label.x }}" y="{{ label.y }}">{{ label.text }}</text>
+    {% endfor %}
+    <g class="gauge-needle" style="--needle-angle: {{ gauge.needle_angle }}deg; transform-origin: {{ gauge.center_x }}px {{ gauge.center_y }}px;" transform="rotate({{ gauge.needle_angle }} {{ gauge.center_x }} {{ gauge.center_y }})">
+      <polygon points="{{ gauge.needle_points }}"></polygon>
+    </g>
+    <circle class="gauge-pivot" cx="{{ gauge.center_x }}" cy="{{ gauge.center_y }}" r="9"></circle>
+    <text class="gauge-value" x="{{ gauge.center_x }}" y="{{ gauge.value_y }}"><tspan class="gauge-value-number">{{ result.bmi }}</tspan><tspan class="gauge-value-unit" dx="8">BMI</tspan></text>
+  </svg>
+  {% if gauge.clamped %}<p class="gauge-note">BMI 超出儀表板刻度範圍（{{ gauge.min }}–{{ gauge.max }}），指針停在端點，請以上方數值為準。</p>{% endif %}
+</div>
