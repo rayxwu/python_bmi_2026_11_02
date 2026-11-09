@@ -1,0 +1,82 @@
+name: Deploy BMI to Azure test slot
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - app.py
+      - serve.py
+      - web.config
+      - requirements.txt
+      - templates/**
+      - static/**
+      - tests/**
+      - .github/workflows/deploy-azure-test.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: azure-bmi-test-slot
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+    env:
+      AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_WEBAPP_SLOT: test
+      PYTHON_RUNTIME_VERSION: 3.14.8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies and run tests
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest discover -s tests
+
+      - name: Package Windows Python app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force dist\runtime | Out-Null
+          Copy-Item app.py, serve.py, web.config dist\
+          Copy-Item templates, static dist\ -Recurse
+          python -m pip install --target dist\site-packages -r requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency packaging failed' }
+
+          $archive = Join-Path $env:RUNNER_TEMP 'python-embed.zip'
+          $url = "https://www.python.org/ftp/python/$env:PYTHON_RUNTIME_VERSION/python-$env:PYTHON_RUNTIME_VERSION-embed-amd64.zip"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $expectedHash = 'A93ABE456AB01BD96D7A085B3CDB6566B3063F4241360D114142FBDB07F0A310'
+          if ((Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash -ne $expectedHash) {
+            throw 'Python runtime archive checksum mismatch'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath dist\runtime
+          Set-Content -Path dist\runtime\python314._pth -Value @('python314.zip', '.', '..', '..\site-packages', 'import site')
+          & .\dist\runtime\python.exe -c 'import flask, waitress, app'
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged Python runtime could not import the app' }
+
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Verify Windows Web App slot
+        shell: pwsh
+        run: |
+          $platform = az webapp show --resource-group $env:AZURE_RESOURCE_GROUP --name $env:AZURE_WEBAPP_NAME --slot $env:AZURE_WEBAPP_SLOT --query reserved --output tsv
+          if ($LASTEXITCODE -ne 0) { throw "Azure Web App slot '$env:AZURE_WEBAPP_SLOT' lookup failed" }
+          if ($platform.Trim().ToLowerInvariant() -ne 'false') { throw 'Target slot must belong to a Windows Azure Web App' }
+
+      - name: Deploy to Azure Web App test slot
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: ${{ env.AZURE_WEBAPP_SLOT }}
+          package: dist
