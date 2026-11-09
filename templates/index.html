@@ -35,6 +35,14 @@
 
               <form method="post" action="{{ url_for('index') }}" novalidate>
                 <div class="form-fields">
+                  <div class="field field-name">
+                    <label for="name">姓名 <span>NAME</span></label>
+                    <div class="input-wrap">
+                      <input id="name" name="name" type="text" autocomplete="name" maxlength="{{ name_max_length }}" placeholder="例如 王小明" value="{{ name_input }}" {% if errors.name %}aria-invalid="true" aria-describedby="name-error"{% endif %}>
+                      <span class="unit">選填</span>
+                    </div>
+                    {% if errors.name %}<p class="field-error" id="name-error">{{ errors.name }}</p>{% endif %}
+                  </div>
                   <div class="field">
                     <label for="height">身高 <span>HEIGHT</span></label>
                     <div class="input-wrap">
@@ -67,7 +75,7 @@
                   <span class="risk-badge risk-{{ result.risk_level_key }}">健康風險 {{ result.risk_level }}</span>
                 </div>
                 <div class="result-divider"></div>
-                <h2 id="result-title">給你的健康建議</h2>
+                <h2 id="result-title">給{% if result.name %}<span class="user-name">{{ result.name }}</span>{% else %}你{% endif %}的健康建議</h2>
                 <p>{{ result.advice }}</p>
                 <h3 class="risk-title"><span aria-hidden="true">!</span> 風險提醒</h3>
                 <ul class="risk-list">

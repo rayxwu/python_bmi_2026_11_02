@@ -1,6 +1,6 @@
 import unittest
 
-from app import BMI_CATEGORIES, GAUGE_MAX, GAUGE_MIN, app, bmi_gauge, bmi_guidance
+from app import BMI_CATEGORIES, GAUGE_MAX, GAUGE_MIN, NAME_MAX_LENGTH, app, bmi_gauge, bmi_guidance
 
 
 class BmiAppTests(unittest.TestCase):
@@ -102,6 +102,61 @@ class BmiAppTests(unittest.TestCase):
         page = response.get_data(as_text=True)
         self.assertNotIn("<script>", page)
         self.assertIn("請輸入大於 0", page)
+
+    def test_initial_page_has_optional_name_field(self):
+        page = self.client.get("/").get_data(as_text=True)
+        self.assertIn('<label for="name">姓名 <span>NAME</span></label>', page)
+        self.assertIn('id="name" name="name" type="text" autocomplete="name" maxlength="%d"' % NAME_MAX_LENGTH, page)
+        self.assertIn('<span class="unit">選填</span>', page)
+
+    def test_name_is_shown_in_health_advice(self):
+        response = self.client.post("/", data={"name": "王小明", "height": "170", "weight": "65"})
+        page = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('<h2 id="result-title">給<span class="user-name">王小明</span>的健康建議</h2>', page)
+        self.assertIn('value="王小明"', page)
+        self.assertIn("維持均衡飲食", page)
+
+    def test_advice_title_without_name_stays_generic(self):
+        for name in (None, "", "   "):
+            with self.subTest(name=name):
+                data = {"height": "170", "weight": "65"}
+                if name is not None:
+                    data["name"] = name
+                page = self.client.post("/", data=data).get_data(as_text=True)
+                self.assertIn('<h2 id="result-title">給你的健康建議</h2>', page)
+                self.assertNotIn('class="user-name"', page)
+
+    def test_name_whitespace_is_normalized(self):
+        page = self.client.post("/", data={"name": "  Ray \t\n Wu  ", "height": "170", "weight": "65"}).get_data(as_text=True)
+        self.assertIn('<span class="user-name">Ray Wu</span>', page)
+        self.assertIn('value="Ray Wu"', page)
+
+    def test_name_is_escaped(self):
+        page = self.client.post("/", data={"name": '"><script>alert(1)</script>', "height": "170", "weight": "65"}).get_data(as_text=True)
+        self.assertNotIn("<script>", page)
+        self.assertIn('value="&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"', page)
+        self.assertIn('<span class="user-name">&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;</span>', page)
+
+    def test_name_length_limit(self):
+        page = self.client.post("/", data={"name": "王" * NAME_MAX_LENGTH, "height": "170", "weight": "65"}).get_data(as_text=True)
+        self.assertIn('<span class="user-name">%s</span>' % ("王" * NAME_MAX_LENGTH), page)
+
+        response = self.client.post("/", data={"name": "王" * (NAME_MAX_LENGTH + 1), "height": "170", "weight": "65"})
+        page = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('aria-invalid="true" aria-describedby="name-error"', page)
+        self.assertIn("姓名請勿超過 %d 個字。" % NAME_MAX_LENGTH, page)
+        self.assertNotIn("YOUR RESULT", page)
+        self.assertIn('value="170"', page)
+        self.assertIn('value="65"', page)
+
+    def test_name_is_kept_when_other_fields_are_invalid(self):
+        page = self.client.post("/", data={"name": "王小明", "height": "", "weight": "65"}).get_data(as_text=True)
+        self.assertIn('value="王小明"', page)
+        self.assertIn('aria-describedby="height-error"', page)
+        self.assertNotIn('aria-describedby="name-error"', page)
+        self.assertNotIn("YOUR RESULT", page)
 
 
 class BmiGaugeTests(unittest.TestCase):
