@@ -4,6 +4,8 @@ from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
+NAME_MAX_LENGTH = 50
+
 # 體位分類（臺灣成人標準）。"upper" 為該區間的上限（不含），最後一個區間沒有上限。
 BMI_CATEGORIES = (
     {
@@ -181,17 +183,22 @@ def parse_positive_number(value):
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    name_input = ""
     height_input = ""
     weight_input = ""
     errors = {}
     result = None
 
     if request.method == "POST":
+        # 姓名為選填：去除前後空白，並將連續空白（含換行、Tab）合併為單一空格。
+        name_input = " ".join(request.form.get("name", "").split())
         height_input = request.form.get("height", "").strip()
         weight_input = request.form.get("weight", "").strip()
         height = parse_positive_number(height_input)
         weight = parse_positive_number(weight_input)
 
+        if len(name_input) > NAME_MAX_LENGTH:
+            errors["name"] = f"姓名請勿超過 {NAME_MAX_LENGTH} 個字。"
         if height is None:
             errors["height"] = "請輸入大於 0 的有效身高（公分）。"
         if weight is None:
@@ -209,6 +216,7 @@ def index():
                 else:
                     displayed_bmi = round(bmi, 1)
                     result = {
+                        "name": name_input,
                         "bmi": f"{displayed_bmi:.1f}",
                         **bmi_guidance(displayed_bmi),
                         "gauge": bmi_gauge(displayed_bmi),
@@ -216,6 +224,8 @@ def index():
 
     return render_template(
         "index.html",
+        name_input=name_input,
+        name_max_length=NAME_MAX_LENGTH,
         height_input=height_input,
         weight_input=weight_input,
         errors=errors,
